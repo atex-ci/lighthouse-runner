@@ -1,0 +1,84 @@
+name: lighthouse
+
+on:  
+  workflow_dispatch:
+    inputs:
+      GIT_REPO:
+        description: 'repository owned by atex-ci to clone'     
+        required: true
+      GIT_BRANCH:
+        description: 'branch to clone'     
+        required: true
+        default: 'main'
+      SPAWN_LOCALHOST:
+        description: '"true" if lighthouse needs a local instance of the website'     
+        required: true
+        default: 'true'
+      UPLOAD_TO_S3:
+        description: 'if you set a value different than "true" lighthouse results refs will not uploaded to shared s3 clipboard'     
+        required: true
+        default: 'true'
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    env:
+      REPO_TO_FETCH: "github.com/atex-ci/${{ github.event.inputs.GIT_REPO}}.git"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY}}
+      GH_USERNAME: ${{ github.repository_owner }}
+      GH_PASSWORD: ${{ secrets.GH_PASSWORD }}
+      SPAWN: "${{ github.event.inputs.SPAWN_LOCALHOST}}"
+      TO_S3: "${{ github.event.inputs.UPLOAD_TO_S3}}"
+      
+    steps:
+      - name: checkout
+        run: |
+          git config --global http.sslverify false
+          git clone --branch ${{ github.event.inputs.GIT_BRANCH}} https://$GH_USERNAME:$GH_PASSWORD@$REPO_TO_FETCH _ 
+      
+      - name: init subrepos
+        run: |
+          cd _
+          sed -i -e "s|github.com|$GH_USERNAME:$GH_PASSWORD@github.com|g" .gitmodules
+          git submodule update --init --recursive
+
+      - name: ensure aws cli is present
+        run: |
+          aws --version
+
+      - name: authenticate aws cli
+        run: |
+          aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
+          aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+
+      - name: lighthouse audit
+        run: |
+          cd _
+
+          echo "1" > lighthouse-result
+
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID?check_suite_focus=true"
+          command="./ci-cd/scripts/lighthouse-ci.sh ${{ github.event.inputs.GIT_BRANCH}} $SPAWN $TO_S3 $run"
+          echo "command about to run '$command'"
+
+          set +e
+          eval $command
+          result=$?
+          echo "$result" > lighthouse-result
+          set -e
+          
+      - name: display cleanup queries
+        run: |
+          cd _
+          git remote show origin > git_dump
+
+          data=$(head -n 1000 git_dump)
+          
+          ./ci-cd/scripts/lighthouse-server-cleanup.sh "$data"
+
+      - name: exit lighthouse result
+        run: |
+          cd _
+          result=$(cat lighthouse-result)
+          exit $result
