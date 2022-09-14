@@ -1,0 +1,68 @@
+name: preview core update
+
+on:  
+  workflow_dispatch:
+    inputs:
+      GIT_REPO:
+        description: 'repository owned by atex-ci to clone. Example: next-web-starterkit'     
+        required: true      
+      GIT_BRANCH:
+        description: 'branch to clone on the given git repository'
+        required: true
+        default: 'main'
+      as_is-hash:
+        type: string
+        description: 'This is the commit on the TOP LEVEL git repository (the one that contains /src submodule) representing the starting point of the simulation, the AS-IS. If omitted last commit on main will be used'
+        required: false
+      to_be-hash:
+        type: string
+        description: 'This commit on the CORE git repository represent the version we want update to (TO-BE). If omitted last commit on main will be used'
+        required: false
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    env:
+      REPO_TO_FETCH: "github.com/atex-ci/${{ github.event.inputs.GIT_REPO}}.git"
+      GH_USERNAME: ${{ github.repository_owner }}
+      GH_PASSWORD: ${{ secrets.GH_PASSWORD }}
+      
+    steps:
+      - name: checkout
+        run: |
+          git config --global http.sslverify false
+          git clone --branch ${{ github.event.inputs.GIT_BRANCH}} https://$GH_USERNAME:$GH_PASSWORD@$REPO_TO_FETCH _ 
+      
+      - name: init subrepos
+        run: |
+          cd _
+          sed -i -e "s|github.com|$GH_USERNAME:$GH_PASSWORD@github.com|g" .gitmodules
+          git submodule update --init --recursive
+
+      - name: install dependencies
+        run: |
+          cd _
+          npm install --global yarn
+          yarn
+
+      - name: trigger the preview update
+        run: |
+          cd _
+
+          repo_short="$(echo $REPO_TO_FETCH | cut -d'/' -f3 | cut -d'.' -f1)"
+          echo "repo is $repo_short"
+
+          as_is="${{ github.event.inputs.as_is-hash }}" 
+          to_be="${{ github.event.inputs.to_be-hash }}"
+
+          if [[ -z "$as_is" ]]; then
+            echo "as_is-hash is not defined 'main' will be used"
+            as_is="main"
+          fi
+
+          if [[ -z "$to_be" ]]; then
+            echo "to_be-hash is not defined 'main' will be used"
+            to_be="main"
+          fi
+
+          node ./ci-cd/detect-impact/runner.js "$repo_short" "$to_be" "$as_is"
