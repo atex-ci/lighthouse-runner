@@ -1,0 +1,45 @@
+name: breaking changes
+
+on:  
+  workflow_dispatch:
+    inputs:
+      GIT_REPO:
+        description: 'repository owned by atex-ci to clone. Example: next-web-starterkit'     
+        required: true   
+        default: 'next-web-starterkit'    
+      GIT_BRANCH:
+        description: 'branch to clone on the given git repository'
+        required: true
+        default: 'main'      
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    env:
+      REPO_TO_FETCH: "github.com/atex-ci/${{ github.event.inputs.GIT_REPO}}.git"
+      GH_USERNAME: ${{ github.repository_owner }}
+      GH_PASSWORD: ${{ secrets.GH_PASSWORD }}
+      
+    steps:
+      - name: checkout
+        run: |
+          git config --global http.sslverify false
+          git clone --branch ${{ github.event.inputs.GIT_BRANCH}} https://$GH_USERNAME:$GH_PASSWORD@$REPO_TO_FETCH _ 
+      
+      - name: init subrepos
+        run: |
+          cd _
+          sed -i -e "s|github.com|$GH_USERNAME:$GH_PASSWORD@github.com|g" .gitmodules
+          git submodule update --init --recursive
+
+      - name: install dependencies
+        run: |
+          cd _
+          npm install --global yarn
+          yarn
+
+      - name: trigger the breaking change analysis
+        run: |
+          cd _
+
+          node ./ci-cd/detect-impact/meta-runner.js
