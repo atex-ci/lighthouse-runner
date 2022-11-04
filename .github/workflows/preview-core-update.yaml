@@ -18,6 +18,10 @@ on:
         type: string
         description: 'This commit on the CORE git repository represent the version we want update to (TO-BE). If omitted last commit on main will be used'
         required: false
+      report_to_teams:
+        type: string
+        description: 'Set this parameter to "true" if you want to report breaking changes on a teams channel'
+        default: 'false'
 
 jobs:
   main:
@@ -26,6 +30,7 @@ jobs:
       REPO_TO_FETCH: "github.com/atex-ci/${{ github.event.inputs.GIT_REPO}}.git"
       GH_USERNAME: ${{ github.repository_owner }}
       GH_PASSWORD: ${{ secrets.GH_PASSWORD }}
+      BREAKING_CHANGES_TEAMS_CHANNEL: ${{ secrets.BREAKING_CHANGES_TEAMS_CHANNEL }}
       
     steps:
       - name: checkout
@@ -45,6 +50,13 @@ jobs:
           npm install --global yarn
           yarn
 
+      - name: Get Current Job Log URL
+        uses: Tiryoh/gha-jobid-action@v0
+        id: jobs
+        with:
+          github_token: ${{ secrets.GH_PASSWORD }}
+          job_name: ${{ github.job }}
+
       - name: trigger the preview update
         run: |
           cd _
@@ -54,6 +66,7 @@ jobs:
 
           as_is="${{ github.event.inputs.as_is-hash }}" 
           to_be="${{ github.event.inputs.to_be-hash }}"
+          report="${{ github.event.inputs.report_to_teams }}"
 
           if [[ -z "$as_is" ]]; then
             echo "as_is-hash is not defined 'main' will be used"
@@ -65,4 +78,11 @@ jobs:
             to_be="main"
           fi
 
-          node ./ci-cd/detect-impact/runner.js "$repo_short" "$to_be" "$as_is"
+          if [[ "$report" == "true" ]]; then
+            run="${{ steps.jobs.outputs.html_url }}|$BREAKING_CHANGES_TEAMS_CHANNEL"
+            # run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID?check_suite_focus=true|$BREAKING_CHANGES_TEAMS_CHANNEL"
+          fi
+
+          echo "$run"
+
+          node ./ci-cd/detect-impact/runner.js "$repo_short" "$to_be" "$as_is" "$run"
