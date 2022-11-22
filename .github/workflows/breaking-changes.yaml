@@ -19,6 +19,7 @@ jobs:
       REPO_TO_FETCH: "github.com/atex-ci/${{ github.event.inputs.GIT_REPO}}.git"
       GH_USERNAME: ${{ github.repository_owner }}
       GH_PASSWORD: ${{ secrets.GH_PASSWORD }}
+      SENTRY_AUTH_TOKEN: "${{ secrets.SENTRY_AUTH_TOKEN}}"
       
     steps:
       - name: checkout

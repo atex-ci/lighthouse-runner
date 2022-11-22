@@ -28,6 +28,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY}}
       GH_USERNAME: ${{ github.repository_owner }}
       GH_PASSWORD: ${{ secrets.GH_PASSWORD }}
+      SENTRY_AUTH_TOKEN: "${{ secrets.SENTRY_AUTH_TOKEN}}"
       SPAWN: "${{ github.event.inputs.SPAWN_LOCALHOST}}"
       TO_S3: "${{ github.event.inputs.UPLOAD_TO_S3}}"
       
